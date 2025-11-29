@@ -2,15 +2,20 @@ const express = require('express');
 const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config();
-const app = express();
-const port = 4000;
 
-app.use(cors());
+const app = express();
+const port = process.env.PORT || 4000;
+
+app.use(
+    cors({
+        origin: '*', // অথবা শুধু frontend URL দিন
+    })
+);
 app.use(express.json());
 
-const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.pscbpur.mongodb.net/?appName=Cluster0`;
+// MongoDB connection
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.pscbpur.mongodb.net/?retryWrites=true&w=majority`;
 
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
     serverApi: {
         version: ServerApiVersion.v1,
@@ -25,72 +30,76 @@ async function run() {
         const db = client.db('shopmini_db');
         const productsCollection = db.collection('products');
 
+        // Get all products
         app.get('/products', async (req, res) => {
-            const result = await productsCollection.find().toArray();
-            res.send(result);
+            try {
+                const result = await productsCollection.find().toArray();
+                res.send(result);
+            } catch (err) {
+                res.status(500).send({ error: 'Failed to fetch products' });
+            }
         });
 
-        app.get('/products', async (req, res) => {
-            const email = req.query.email;
-            const result = await productsCollection
-                .find({ created_by: email })
-                .toArray();
-            res.send(result);
-        });
-
+        // Get product by ID
         app.get('/products/:id', async (req, res) => {
             const { id } = req.params;
-            console.log(id);
-
-            const result = await productsCollection.findOne({
-                _id: new ObjectId(id),
-            });
-            res.send({
-                success: true,
-                result,
-            });
+            try {
+                const result = await productsCollection.findOne({
+                    _id: new ObjectId(id),
+                });
+                res.send({ success: true, result });
+            } catch (err) {
+                res.status(500).send({ error: 'Failed to fetch product' });
+            }
         });
 
+        // Add new product
         app.post('/products', async (req, res) => {
             const data = req.body;
-            const result = productsCollection.insertOne(data);
-            res.send({ success: true, result });
+            try {
+                const result = await productsCollection.insertOne(data);
+                res.send({ success: true, result });
+            } catch (err) {
+                res.status(500).send({ error: 'Failed to add product' });
+            }
         });
 
+        // Update product
         app.put('/products/:id', async (req, res) => {
             const { id } = req.params;
             const data = req.body;
-            const filter = { _id: new ObjectId(id) };
-            const update = {
-                $set: data,
-            };
-            const result = await productsCollection.updateOne(filter, update);
-            res.send({
-                success: true,
-                result,
-            });
+            try {
+                const filter = { _id: new ObjectId(id) };
+                const update = { $set: data };
+                const result = await productsCollection.updateOne(
+                    filter,
+                    update
+                );
+                res.send({ success: true, result });
+            } catch (err) {
+                res.status(500).send({ error: 'Failed to update product' });
+            }
         });
 
+        // Delete product
         app.delete('/products/:id', async (req, res) => {
             const { id } = req.params;
-            const filter = { _id: new ObjectId(id) };
-            const result = await productsCollection.deleteOne(filter);
-
-            res.send({
-                success: true,
-                result,
-            });
+            try {
+                const result = await productsCollection.deleteOne({
+                    _id: new ObjectId(id),
+                });
+                res.send({ success: true, result });
+            } catch (err) {
+                res.status(500).send({ error: 'Failed to delete product' });
+            }
         });
 
-        await client.db('admin').command({ ping: 1 });
-        console.log(
-            'Pinged your deployment. You successfully connected to MongoDB!'
-        );
+        console.log('Connected to MongoDB successfully!');
     } finally {
-        // Ensures that the client will close when you finish/error
-        // await client.close();
+        // client.close(); // Deployable server এ client খোলা রাখবেন
     }
 }
+
 run().catch(console.dir);
 
 app.get('/', (req, res) => {
